@@ -11,8 +11,10 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from src.application.goal_progress import evaluate_goal_progress
 from src.config import get_settings
 from src.dashboard import charts, data_loader
+from src.domain.models import GoalDirection, ProgressSnapshot
 
 st.set_page_config(page_title="Polar Flow Analyzer", layout="wide")
 
@@ -68,6 +70,46 @@ def render_training_tab(df: pd.DataFrame) -> None:
     col2.plotly_chart(charts.pace_trend_figure(filtered), use_container_width=True)
 
 
+def render_goals_tab(snapshots: dict[str, ProgressSnapshot]) -> None:
+    if not snapshots:
+        st.info(
+            "Sin objetivos configurados. Define TARGET_WEIGHT_KG, TARGET_WEEKLY_KM, "
+            "TARGET_SLEEP_HOURS o TARGET_DAILY_STEPS en tu `.env` para activar esta pestaña."
+        )
+        return
+
+    cols = st.columns(len(snapshots))
+    for col, snapshot in zip(cols, snapshots.values()):
+        goal = snapshot.goal
+        label = {
+            "weight": "Peso",
+            "weekly_distance": "Km esta semana",
+            "sleep": "Sueño (media 7d)",
+            "steps": "Pasos (media 7d)",
+        }.get(goal.name, goal.name)
+
+        if snapshot.current is None:
+            col.metric(label, "sin datos")
+            continue
+
+        delta = snapshot.delta
+        # En AT_MOST (peso) bajar es bueno -> delta negativo se muestra normal,
+        # en AT_LEAST subir es bueno -> invertir el color sería confuso, así
+        # que se deja el signo natural y se confía en la flecha de Streamlit.
+        delta_color = "inverse" if goal.direction is GoalDirection.AT_MOST else "normal"
+        col.metric(
+            label,
+            f"{snapshot.current:.1f} {goal.unit}",
+            delta=f"{delta:+.1f} {goal.unit} vs objetivo" if delta is not None else None,
+            delta_color=delta_color,
+        )
+        ratio = snapshot.progress_ratio
+        if ratio is not None:
+            col.progress(min(max(ratio, 0.0), 1.0))
+        status = "En objetivo" if snapshot.on_track else "Fuera de objetivo"
+        col.caption(f"Objetivo: {goal.target:.1f} {goal.unit} · {status}")
+
+
 def main() -> None:
     settings = get_settings()
     st.title("Polar Flow Analyzer")
@@ -75,8 +117,13 @@ def main() -> None:
     physical_df = _load_physical(settings.processed_data_dir)
     activity_df = _load_activity(settings.processed_data_dir)
     training_df = _load_training(settings.processed_data_dir)
+    goal_snapshots = evaluate_goal_progress(physical_df, activity_df, training_df, settings)
 
-    tab_physical, tab_activity, tab_training = st.tabs(["Físico", "Actividad", "Entrenamientos"])
+    tab_goals, tab_physical, tab_activity, tab_training = st.tabs(
+        ["Objetivos", "Físico", "Actividad", "Entrenamientos"]
+    )
+    with tab_goals:
+        render_goals_tab(goal_snapshots)
     with tab_physical:
         render_physical_tab(physical_df)
     with tab_activity:

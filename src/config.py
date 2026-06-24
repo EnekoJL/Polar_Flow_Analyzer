@@ -34,6 +34,19 @@ class Settings(BaseSettings):
         description="Altura del usuario en metros, usada para calcular el IMC",
     )
 
+    target_weight_kg: float | None = Field(
+        default=None, description="Objetivo de peso en kg (AT_MOST)"
+    )
+    target_weekly_km: float | None = Field(
+        default=None, description="Objetivo de distancia semanal en km (AT_LEAST)"
+    )
+    target_sleep_hours: float | None = Field(
+        default=None, description="Objetivo de horas de sueño promedio (AT_LEAST)"
+    )
+    target_daily_steps: float | None = Field(
+        default=None, description="Objetivo de pasos diarios promedio (AT_LEAST)"
+    )
+
     token_storage_path: str = Field(
         default=".polar_tokens.json",
         description="Ruta del archivo local donde se persisten los tokens OAuth2",

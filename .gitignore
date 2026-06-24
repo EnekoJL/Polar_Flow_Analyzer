@@ -1,6 +1,7 @@
 # Entornos y dependencias
 .venv/
 venv/
+env/
 __pycache__/
 *.pyc
 *.egg-info/
